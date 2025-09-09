@@ -1032,7 +1032,7 @@ void SwitchChoice() {
 int main() {
     try {
         // Doplnění vlastních hodnot
-        BankingApp app("tcp://127.0.0.1:3306", "root", "SQLprojekt3", "bankapp");
+        BankingApp app("tcp://127.0.0.1:3306", "root", "heslo", "bankapp");
         app.run();
     } catch (const exception& e) {
         cerr << "Fatální chyba: " << e.what() << endl;
