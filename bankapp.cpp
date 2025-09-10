@@ -21,19 +21,19 @@ using namespace std;
 using namespace sql;
 
 // Utility class - základní funkce
-class Utils {
+class Utilities {
 public:
     static void Mezera() {
         cout << "\n" << endl;
     }
     
-    static string toLower(const string& text) {
+    static string toLower(const string& text) { //převod na malá písmena -> správné fungování porovnání
         string result = text;
         transform(result.begin(), result.end(), result.begin(), ::tolower);
         return result;
     }
     
-    static string formatText(const string& text) {
+    static string formatText(const string& text) { // první písmeno velké, zbytek malý
         if (!text.empty()) {
             string formatted = text;
             transform(formatted.begin(), formatted.end(), formatted.begin(), ::tolower);
@@ -46,7 +46,7 @@ public:
     }
 };
 
-// Transaction class  - jednotlivé transakce
+// Transaction class  - jednotlivé transakce s danými parametry
 class Transaction {
 private:
     int id;
@@ -58,13 +58,12 @@ private:
     int sign;
     
 public:
-    Transaction(int id, const string& desc, double amt, const string& dt, 
-                int catId, int usrId, int sgn)
-        : id(id), description(desc), amount(amt), date(dt), 
-          categoryId(catId), userId(usrId), sign(sgn) {}
+    // konstruktor
+    Transaction(int id, const string& desc, double amt, const string& dt, int catId, int usrId, int sgn) 
+                : id(id), description(desc), amount(amt), date(dt), categoryId(catId), userId(usrId), sign(sgn) {}
     
 
-          int getId() const { return id; }
+    int getId() const { return id; }
     string getDescription() const { return description; }
     double getAmount() const { return amount; }
     string getDate() const { return date; }
@@ -78,21 +77,6 @@ public:
     }
 };
 
-// Category class
-class Category {
-private:
-    int id;
-    string name;
-    int userId;
-    
-public:
-    Category(int id, const string& name, int userId): id(id), name(name), userId(userId) {}
-
-    int getId() const { return id; }
-    string getName() const { return name; }
-    int getUserId() const { return userId; }
-};
-
 // Database manager class - vytvoření tabulek & připojení k db
 class DatabaseManager {
 private:
@@ -104,8 +88,8 @@ public:
             mysql::MySQL_Driver *driver = mysql::get_mysql_driver_instance();
             connection.reset(driver->connect(host, username, password));
             connection->setSchema(database);
-        } catch (SQLException &e) {
-            throw runtime_error("Database connection failed: " + string(e.what()));
+        }catch (SQLException &e) {
+            throw runtime_error("K databázi se nepovedlo připojit.");
         }
     }
     
@@ -113,7 +97,7 @@ public:
         return connection.get();
     }
     
-    void createTables() {
+    void createTables() { // vytvoření tabulek, pokud neexistují
         unique_ptr<Statement> stmt(connection->createStatement());
         
         stmt->execute("CREATE TABLE IF NOT EXISTS users ("
@@ -145,7 +129,7 @@ public:
     }
 };
 
-// User class
+// User class - vytvoření, popřípadě načtení uživatele
 class User {
 private:
     int id;
@@ -154,7 +138,7 @@ private:
     DatabaseManager* dbManager;
     
 public:
-    User(const string& username, DatabaseManager* dbMgr) 
+    User(const string& username, DatabaseManager* dbMgr) // konstruktor - musí být tak User
         : username(username), monthlyBudget(0), dbManager(dbMgr) {
         createOrLoadUser();
     }
@@ -164,7 +148,7 @@ public:
     double getMonthlyBudget() const { return monthlyBudget; }
     
 private:
-    void createOrLoadUser() {
+    void createOrLoadUser() { // vytvoření uživatele, pokud neexistuje, jinak načtení
         Connection* con = dbManager->getConnection();
         
         unique_ptr<PreparedStatement> getID(con->prepareStatement(
@@ -176,7 +160,7 @@ private:
             id = res->getInt("id");
             cout << "Uživatel " << username << " již existuje" << endl;
             loadBudget();
-        } else {
+        } else { // vytvoření nového uživatele
             unique_ptr<PreparedStatement> pstmt(con->prepareStatement(
                 "INSERT INTO users (username) VALUES (?)"));
             pstmt->setString(1, username);
@@ -194,24 +178,24 @@ private:
             }
             cout << "Uživatel " << username << " byl vytvořen." << endl;
         }
-        Utils::Mezera();
+        Utilities::Mezera();
     }
     
-    void loadBudget() {
+    void loadBudget() { // načtení měsíčního rozpočtu - jen pokud existuje uživatel
         Connection* con = dbManager->getConnection();
         unique_ptr<PreparedStatement> pstmt(con->prepareStatement(
             "SELECT budget FROM monthly_budget WHERE user_id = ?"));
         pstmt->setInt(1, id);
         unique_ptr<ResultSet> res(pstmt->executeQuery());
         
-        if (res->next()) {
+        if (res->next()) { // nemám budget -> nic nevypíše
             monthlyBudget = res->getDouble("budget");
             cout << "Měsíční rozpočet je nastaven na: " << monthlyBudget << endl;
         }
     }
     
 public:
-    void setBudget(double budget) {
+    void setBudget(double budget) { // nastavení měsíčního rozpočtu
         // kontrola nezápornosti je hotová
         Connection* con = dbManager->getConnection();
         unique_ptr<PreparedStatement> pstmt(con->prepareStatement(
@@ -227,7 +211,7 @@ public:
     }
 };
 
-// Transaction Manager class
+// Transaction Manager class - přidání, zobrazení, smazání transakcí & výpočty
 class TransactionManager {
 private:
     DatabaseManager* dbManager;
@@ -235,18 +219,18 @@ private:
 public:
     TransactionManager(DatabaseManager* dbMgr) : dbManager(dbMgr) {}
     
-    void addTransaction(int userId) {
+    void addTransaction(int userId) { // nachytání údajů o transakci od uživatele
         string description, amountStr, date;
         double amount;
         int sign = 1;
         
         cout << "Pro návrat do menu napište slovo 'ZPET'.\n" << endl;
         
-        while (true) {
+        while (true) { // přidávání výdajů, dokud uživatel nechce skončit -> zadat "ZPET"
             cout << "Popis výdaje/příjmu:" << endl;
             getline(cin, description);
             
-            if (Utils::toLower(description) == "zpet") return;
+            if (Utilities::toLower(description) == "zpet") return;
             if (description.empty()) {
                 cout << "Popis nesmí být prázdný." << endl;
                 continue;
@@ -256,7 +240,7 @@ public:
                 cout << "Částka (příjem zadej jako kladné číslo, výdaj jako záporné): \n";
                 cin >> amountStr;
                 
-                if (Utils::toLower(amountStr) == "zpet") return;
+                if (Utilities::toLower(amountStr) == "zpet") return;
                 
                 try {
                     amount = stod(amountStr);
@@ -266,42 +250,52 @@ public:
                 }
             }
             
-            sign = (amount < 0) ? -1 : 1;
+            if (amount < 0){
+                sign = -1;
+            }else{
+                sign = 1;
+            }
             cin.ignore(numeric_limits<streamsize>::max(), '\n');
             
             cout << "\nDatum transakce je aktuální datum? (a/n): " << endl;
             string choice;
             cin >> choice;
             
-            if (Utils::toLower(choice) == "zpet") return;
+            if (Utilities::toLower(choice) == "zpet") {
+                return;
+            }
             cin.ignore(numeric_limits<streamsize>::max(), '\n');
             
-            if (Utils::toLower(choice) == "n") {
+            if (Utilities::toLower(choice) == "n") {
                 cout << "\nZadej datum ve formátu YYYY-MM-DD:" << endl;
                 getline(cin, date);
-                if (Utils::toLower(date) == "zpet") return;
+                if (Utilities::toLower(date) == "zpet") {
+                    return;
+                }        
             }
             
             string category;
             cout << "\nZadej kategorii: " << endl;
             getline(cin, category);
             
-            if (Utils::toLower(category) == "zpet") return;
+            if (Utilities::toLower(category) == "zpet") {
+                return;
+            }
             
             int categoryId = getOrCreateCategory(userId, category);
-            insertTransaction(userId, description, amount, sign, date, categoryId, Utils::toLower(choice) == "n");
+            insertTransaction(userId, description, amount, sign, date, categoryId, Utilities::toLower(choice) == "n");
             
             cout << "\nVýdaj uložen!" << endl;
-            checkBudgetWarning(userId);
-            Utils::Mezera();
+            checkBudgetWarning(userId); // kontrola přesažení rozpočtu
+            Utilities::Mezera();
         }
     }
     
-    double calculateSum(int userId, bool isExpense, int days = -1) {
+    double SumOfMoneyLastNDays(int userId, bool isExpense, int days = -1) { // výpočet součtu výdajů/příjmů za určité období
         Connection* con = dbManager->getConnection();
         unique_ptr<PreparedStatement> pstmt;
         
-        if (days == -1) {
+        if (days == -1) { // všechny
             pstmt.reset(con->prepareStatement(
                 "SELECT SUM(amount) AS total FROM expenses WHERE user_id = ? AND sgn = ?"));
         } else {
@@ -310,7 +304,11 @@ public:
         }
         
         pstmt->setInt(1, userId);
-        pstmt->setInt(2, isExpense ? -1 : 1);
+        if (isExpense) {
+            pstmt->setInt(2, -1);
+        } else {
+            pstmt->setInt(2, 1);
+        }
         
         if (days != -1) {
             pstmt->setInt(3, days);
@@ -324,10 +322,10 @@ public:
         return 0;
     }
     
-    void showTransactions(int userId) {
+    void showTransactions(int userId) { // zobrazení všech transakcí uživatele
         Connection* con = dbManager->getConnection();
         unique_ptr<PreparedStatement> pstmt(con->prepareStatement(
-            "SELECT e.id, e.description, e.amount, e.expense_date, c.name AS category_name "
+            "SELECT e.description, e.amount, e.expense_date, c.name AS category_name "
             "FROM expenses e "
             "LEFT JOIN category c ON e.category_id = c.id "
             "WHERE e.user_id = ?"));
@@ -339,25 +337,21 @@ public:
             return;
         }
         
-        cout << "ID | Popis | Částka | Datum | Kategorie \n" << endl;
+        cout << "Popis | Částka | Datum | Kategorie \n" << endl;
         res->beforeFirst();
         
         while (res->next()) {
-            Transaction trans(
-                res->getInt("id"),
-                res->getString("description"),
-                res->getDouble("amount"),
-                res->getString("expense_date"),
-                0,
-                userId,
-                0
-            );
-            trans.display(res->getString("category_name"));
+            string description = res->getString("description");
+            double amount = res->getDouble("amount");
+            string date = res->getString("expense_date");
+            string category = res->getString("category_name");
+            
+            cout << description << " | " << amount << " | " << date << " | " << category << endl;
         }
-        Utils::Mezera();
+        Utilities::Mezera();
     }
-    
-    void deleteTransaction(int userId) {
+        
+    void deleteTransaction(int userId) { // smazání transakce
         string description, amountStr;
         double amount;
         
@@ -365,20 +359,20 @@ public:
         cout << "Zadej popis transakce, kterou chceš smazat: " << endl;
         getline(cin, description);
         
-        if (Utils::toLower(description) == "zpet") {
-            Utils::Mezera();
+        if (Utilities::toLower(description) == "zpet") {
+            Utilities::Mezera();
             return;
         }
         
         cout << "Zadej částku této transakce: " << endl;
         cin >> amountStr;
         
-        if (Utils::toLower(amountStr) == "zpet") {
-            Utils::Mezera();
+        if (Utilities::toLower(amountStr) == "zpet") {
+            Utilities::Mezera();
             return;
         }
         
-        try {
+        try { // try, jestli je částka číslo
             amount = stod(amountStr);
         } catch (const invalid_argument& e) {
             cout << "Zadej platnou hodnotu." << endl;
@@ -391,7 +385,7 @@ public:
         
         if (matchingTransactions.empty()) {
             cout << "Žádná transakce nebyla nalezena." << endl;
-            Utils::Mezera();
+            Utilities::Mezera();
             return;
         }
         
@@ -418,7 +412,7 @@ public:
             
             if (!validId) {
                 cout << "Neplatné ID transakce. Operace zrušena." << endl;
-                Utils::Mezera();
+                Utilities::Mezera();
                 return;
             }
             
@@ -426,16 +420,17 @@ public:
         }
         
         executeDelete(deleteId, userId);
-        Utils::Mezera();
+        Utilities::Mezera();
     }
     
 private:
+    //získání id kategorie, pokud neexistuje, vytvoří se
     int getOrCreateCategory(int userId, const string& categoryName) {
         Connection* con = dbManager->getConnection();
         
         unique_ptr<PreparedStatement> getCatId(con->prepareStatement(
             "SELECT id FROM category WHERE name = ? AND user_id = ?"));
-        getCatId->setString(1, Utils::formatText(categoryName));
+        getCatId->setString(1, Utilities::formatText(categoryName));
         getCatId->setInt(2, userId);
         unique_ptr<ResultSet> res(getCatId->executeQuery());
         
@@ -446,13 +441,13 @@ private:
         // vytvoření nové kategorie
         unique_ptr<PreparedStatement> createCat(con->prepareStatement(
             "INSERT INTO category (name, user_id) VALUES (?, ?)"));
-        createCat->setString(1, Utils::formatText(categoryName));
+        createCat->setString(1, Utilities::formatText(categoryName));
         createCat->setInt(2, userId);
         createCat->execute();
         
         unique_ptr<PreparedStatement> getNewId(con->prepareStatement(
             "SELECT id FROM category WHERE name = ? AND user_id = ?"));
-        getNewId->setString(1, Utils::formatText(categoryName));
+        getNewId->setString(1, Utilities::formatText(categoryName));
         getNewId->setInt(2, userId);
         unique_ptr<ResultSet> newRes(getNewId->executeQuery());
         
@@ -463,12 +458,12 @@ private:
         return 0;
     }
     
-    void insertTransaction(int userId, const string& description, double amount, 
-                          int sign, const string& date, int categoryId, bool hasCustomDate) {
+    //vložení transakce do db
+    void insertTransaction(int userId, const string& description, double amount, int sign, const string& date, int categoryId, bool hasCustomDate) {
         Connection* con = dbManager->getConnection();
         unique_ptr<PreparedStatement> pstmt;
         
-        if (hasCustomDate) {
+        if (hasCustomDate) { // vlastní datum
             pstmt.reset(con->prepareStatement(
                 "INSERT INTO expenses (description, amount, user_id, sgn, expense_date, category_id) VALUES (?, ?, ?, ?, ?, ?)"));
             pstmt->setString(5, date);
@@ -479,7 +474,7 @@ private:
             pstmt->setInt(5, categoryId);
         }
         
-        pstmt->setString(1, Utils::formatText(description));
+        pstmt->setString(1, Utilities::formatText(description));
         pstmt->setDouble(2, amount);
         pstmt->setInt(3, userId);
         pstmt->setInt(4, sign);
@@ -488,8 +483,9 @@ private:
         con->commit();
     }
     
-    void checkBudgetWarning(int userId) {
-        double totalMoney = calculateSum(userId, true, 30) + calculateSum(userId, false, 30);
+
+    void checkBudgetWarning(int userId) { // kontrola rozpočtu
+        double totalMoney = SumOfMoneyLastNDays(userId, true, 30) + SumOfMoneyLastNDays(userId, false, 30);
         
         Connection* con = dbManager->getConnection();
         unique_ptr<PreparedStatement> budgetPstmt(con->prepareStatement(
@@ -508,12 +504,13 @@ private:
         }
     }
     
+    // pomocná funkce pro smazání transakce - najde všechny odpovídající zadanému popisu a částce
     vector<Transaction> findTransactions(int userId, const string& description, double amount) {
         Connection* con = dbManager->getConnection();
         unique_ptr<PreparedStatement> pstmt(con->prepareStatement(
             "SELECT id, description, amount, expense_date FROM expenses WHERE user_id = ? AND description = ? AND amount = ?"));
         pstmt->setInt(1, userId);
-        pstmt->setString(2, Utils::formatText(description));
+        pstmt->setString(2, Utilities::formatText(description));
         pstmt->setDouble(3, amount);
         unique_ptr<ResultSet> res(pstmt->executeQuery());
         
@@ -528,9 +525,10 @@ private:
             );
         }
         
-        return transactions;
+        return transactions; // všechny odpovídající transakce
     }
     
+    // mázání kategorie, pokud v ní nezůstaly žádné transakce
     void executeDelete(int transactionId, int userId) {
         Connection* con = dbManager->getConnection();
         int categoryId = 0;
@@ -552,7 +550,7 @@ private:
         delStmt->setInt(2, userId);
         delStmt->execute();
 
-        // Kontrola, jestli je ještě nějaká transakce v kategorii - ne -> smazat
+        // Kontrola, jestli je ještě nějaká transakce v kategorii
         if (categoryId > 0) {
             unique_ptr<PreparedStatement> checkStmt(con->prepareStatement(
                 "SELECT COUNT(*) as count FROM expenses WHERE category_id = ? AND user_id = ?"));
@@ -574,15 +572,16 @@ private:
     }
 };
 
-// Category Manager class
+// Category Manager class - filtrování podle kategorie & výpočet součtu v kategorii
 class CategoryManager {
 private:
     DatabaseManager* dbManager;
     
 public:
     CategoryManager(DatabaseManager* dbMgr) : dbManager(dbMgr) {}
-    
-    void filterByCategory(int userId) {
+
+
+    void filterByCategory(int userId) { // zobrazení kategorií a filtrování podle kategorie
         cout << "Dané kategorie jsou: " << endl;
         
         Connection* con = dbManager->getConnection();
@@ -600,7 +599,7 @@ public:
         while (res->next()) {
             cout << " - " << res->getString("name") << endl;
         }
-        Utils::Mezera();
+        Utilities::Mezera();
         
         string category;
         cout << "Zadej kategorii, kterou chceš filtrovat: " << endl;
@@ -610,6 +609,7 @@ public:
     }
     
 private:
+    // zobrazení transakcí v dané kategorii - pomocná funkce k filterByCategory
     void showTransactionsByCategory(int userId, const string& categoryName) {
         Connection* con = dbManager->getConnection();
         unique_ptr<PreparedStatement> pstmt(con->prepareStatement(
@@ -618,11 +618,11 @@ private:
             "LEFT JOIN category c ON e.category_id = c.id "
             "WHERE e.user_id = ? AND c.name = ?"));
         pstmt->setInt(1, userId);
-        pstmt->setString(2, Utils::formatText(categoryName));
+        pstmt->setString(2, Utilities::formatText(categoryName));
         
         unique_ptr<ResultSet> res(pstmt->executeQuery());
         
-        if (!res->next()) {
+        if (!res->next()) { // teď už asi zbytečně - prázdný kategorie mažu
             cout << "Žádné výdaje v této kategorii nejsou." << endl;
             return;
         }
@@ -630,11 +630,11 @@ private:
         cout << "Výdaje v kategorii " << categoryName << ":\n" << endl;
         cout << "Popis | Částka | Datum \n" << endl;
         
-        res->beforeFirst();
+        res->beforeFirst(); // kurzor zpět na začátek
         while (res->next()) {
             cout << res->getString("description") << " | " << res->getDouble("amount") << " | " << res->getString("expense_date") << endl;
         }
-        Utils::Mezera();
+        Utilities::Mezera();
         
         cout << "Přeješ si sečíst transakce v této kategorii? (a/n): " << endl;
         string choice;
@@ -645,6 +645,7 @@ private:
         }
     }
     
+    // výpočet součtu transakcí v dané kategorii - pomocná funkce k filterByCategory
     void calculateCategorySum(int userId, const string& categoryName) {
         Connection* con = dbManager->getConnection();
         unique_ptr<PreparedStatement> sumStmt(con->prepareStatement(
@@ -659,11 +660,9 @@ private:
         if (sumRes->next()) {
             double totalCategory = sumRes->getDouble("total_category");
             if (totalCategory < 0) {
-                cout << "Celkové výdaje v kategorii " << categoryName 
-                     << " jsou: " << abs(totalCategory) << endl;
+                cout << "Celkové výdaje v kategorii " << categoryName << " jsou: " << abs(totalCategory) << endl;
             } else {
-                cout << "Celkové příjmy v kategorii " << categoryName 
-                     << " jsou: " << totalCategory << endl;
+                cout << "Celkové příjmy v kategorii " << categoryName << " jsou: " << totalCategory << endl;
             }
         }
     }
@@ -676,6 +675,7 @@ private:
 public:
     FileManager(DatabaseManager* dbMgr) : dbManager(dbMgr) {}
     
+    // export do csv
     void exportToCSV(int userId) {
         string fileName;
         cout << "Jak chcete pojmenovat soubor?" << endl;
@@ -719,9 +719,10 @@ public:
         cout << "Data byla úspěšně exportována do souboru: " << fileName << endl;
     }
     
+    // import z csv
     void importFromCSV(int userId) {
         string fileName;
-        cout << "Vkládejte soubory, kde jsou transakce tvaru: 'popis, částka, datum, kategorie'.\n" << endl;
+        cout << "Vkládejte soubory, kde jsou transakce zadány ve tvaru: 'popis, částka, datum, kategorie'.\n" << endl;
         cout << "Napište název souboru, který chcete otevřít - včetně přípony: (nazev_souboru.csv)" << endl;
         getline(cin, fileName);
         
@@ -742,6 +743,7 @@ public:
     }
     
 private:
+    // zpracování jednotlivých řádku csv - pomocná funkce k importFromCSV
     void processCSVLine(const string& line, int userId) {
         stringstream ss(line);
         string description, amountStr, date, category;
@@ -763,12 +765,17 @@ private:
             categoryId = getOrCreateCategory(userId, category);
         }
         
-        int sign = (amount < 0) ? -1 : 1;
+        int sign;
+        if (amount <0){
+            sign = -1;
+        }else{
+            sign = 1;
+        }
         
         Connection* con = dbManager->getConnection();
         unique_ptr<PreparedStatement> pstmt(con->prepareStatement(
             "INSERT INTO expenses (description, amount, user_id, expense_date, sgn, category_id) VALUES (?, ?, ?, ?, ?, ?)"));
-        pstmt->setString(1, Utils::formatText(description));
+        pstmt->setString(1, Utilities::formatText(description));
         pstmt->setDouble(2, amount);
         pstmt->setInt(3, userId);
         pstmt->setString(4, date);
@@ -783,12 +790,13 @@ private:
         pstmt->executeUpdate();
     }
     
+    //získání id kategorie - pomocná funkce k importFromCSV
     int getOrCreateCategory(int userId, const string& categoryName) {
         Connection* con = dbManager->getConnection();
         
         unique_ptr<PreparedStatement> getCatId(con->prepareStatement(
             "SELECT id FROM category WHERE name = ? AND user_id = ?"));
-        getCatId->setString(1, Utils::formatText(categoryName));
+        getCatId->setString(1, Utilities::formatText(categoryName));
         getCatId->setInt(2, userId);
         unique_ptr<ResultSet> res(getCatId->executeQuery());
         
@@ -799,13 +807,13 @@ private:
         // vytvoření nové kategorie
         unique_ptr<PreparedStatement> createCat(con->prepareStatement(
             "INSERT INTO category (name, user_id) VALUES (?, ?)"));
-        createCat->setString(1, Utils::formatText(categoryName));
+        createCat->setString(1, Utilities::formatText(categoryName));
         createCat->setInt(2, userId);
         createCat->execute();
         
         unique_ptr<PreparedStatement> getNewId(con->prepareStatement(
             "SELECT id FROM category WHERE name = ? AND user_id = ?"));
-        getNewId->setString(1, Utils::formatText(categoryName));
+        getNewId->setString(1, Utilities::formatText(categoryName));
         getNewId->setInt(2, userId);
         unique_ptr<ResultSet> newRes(getNewId->executeQuery());
         
@@ -817,8 +825,8 @@ private:
     }
 };
 
-// Main class
-class BankingApp {
+// Main class - hlavní běh programu
+class BankApp {
 private:
     unique_ptr<DatabaseManager> dbManager;
     unique_ptr<User> currentUser;
@@ -827,7 +835,7 @@ private:
     unique_ptr<FileManager> fileManager;
     
 public:
-    BankingApp(const string& host, const string& username, const string& password, const string& database) {
+    BankApp(const string& host, const string& username, const string& password, const string& database) {
         try {
             dbManager = make_unique<DatabaseManager>(host, username, password, database);
             dbManager->createTables();
@@ -842,7 +850,9 @@ public:
         }
     }
     
-    void run() {
+    
+    // hlavní běh programu
+    void run() { 
         try {
             initializeUser();
             SwitchChoice();
@@ -850,8 +860,12 @@ public:
             cerr << "Chyba: " << e.what() << endl;
         }
     }
+
+
     
 private:
+    
+    // inicializace uživatele
     void initializeUser() {
         string username;
         do {
@@ -859,172 +873,180 @@ private:
             getline(cin, username);
         } while (username.empty());
         
-        Utils::Mezera();
+        Utilities::Mezera();
         currentUser = make_unique<User>(username, dbManager.get());
     }
     
+    // switch pro volby uživatele
+    void SwitchChoice() {
+        string choiceStr;
+        int choice = 0;
+        
+        while (choice != 10) {
+            int days;
+            double expenses, incomes, total;
 
-void SwitchChoice() {
-    string choiceStr;
-    int choice = 0;
-    
-    while (choice != 10) {
-        string menu = "1. Přidej výdaj/příjem\n"
-                     "2. Sečti výdaje\n"
-                     "3. Sečti příjmy\n"
-                     "4. Vypiš celkový zisk/ztrátu\n"
-                     "5. Odeber transakci\n"
-                     "6. Tabulka transakcí\n"
-                     "7. Nastavení měsíčního rozpočtu\n"
-                     "8. Filtrování podle kategorie\n"
-                     "9. Import a export tabulky\n"
-                     "10. Konec programu";
-        
-        cout << menu << endl;
-        cout << "Zadej číslo operace (1-10): " << endl;
-        cin >> choiceStr;
-        cin.ignore(numeric_limits<streamsize>::max(), '\n');
-        
-        try { // mám fakt číslo
-            choice = stoi(choiceStr);
-        } catch (const invalid_argument& e) {
-            choice = 0; // Neplatná volba
-            cout << "Neplatná volba." << endl;
-            Utils::Mezera();
-            continue;
-        }
-        
-        Utils::Mezera();
-        try {
-            switch (choice) {
-                case 1:
-                    transactionManager->addTransaction(currentUser->getId());
-                    break;
-                case 2:
-                    handleSumExpenses();
-                    break;
-                case 3:
-                    handleSumIncomes();
-                    break;
-                case 4:
-                    handleTotalBalance();
-                    break;
-                case 5:
-                    transactionManager->deleteTransaction(currentUser->getId());
-                    break;
-                case 6:
-                    transactionManager->showTransactions(currentUser->getId());
-                    break;
-                case 7:
-                    handleBudgetSetting();
-                    break;
-                case 8:
-                    categoryManager->filterByCategory(currentUser->getId());
-                    Utils::Mezera();
-                    break;
-                case 9:
-                    handleImportExport();
-                    break;
-                case 10:
-                    cout << "Konec programu." << endl;
-                    Utils::Mezera();
-                    break;
-                default:
-                    cout << "Neplatná volba." << endl;
-                    Utils::Mezera();
-                    break;
+            string menu = "1. Přidej výdaj/příjem\n"
+                        "2. Sečti výdaje\n"
+                        "3. Sečti příjmy\n"
+                        "4. Vypiš celkový zisk/ztrátu\n"
+                        "5. Odeber transakci\n"
+                        "6. Tabulka transakcí\n"
+                        "7. Nastavení měsíčního rozpočtu\n"
+                        "8. Filtrování podle kategorie\n"
+                        "9. Import a export tabulky\n"
+                        "10. Konec programu";
+            
+            cout << menu << endl;
+            cout << "Zadej číslo operace (1-10): " << endl;
+            cin >> choiceStr;
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            
+            try { // mám fakt číslo
+                choice = stoi(choiceStr);
+            } catch (const invalid_argument& e) {
+                choice = 0; // Neplatná volba
+                cout << "Neplatná volba." << endl;
+                Utilities::Mezera();
+                continue;
             }
-        } catch (const exception& e) {
-            cerr << "Chyba při zpracování volby: " << e.what() << endl;
-            Utils::Mezera();
-        }
-    }
-}
-    
+            
+            Utilities::Mezera();
+            try {
+                switch (choice) {
 
-    void handleSumExpenses() {
-        cout << "Za jaké období (dny) chceš sečíst výdaje? (Pro všechny výdaje zadej -1): " << endl;
-        int days;
-        cin >> days;
-        cin.ignore(numeric_limits<streamsize>::max(), '\n');
-        
-        double expenses = transactionManager->calculateSum(currentUser->getId(), true, days);
-        cout << "Výdaje za dané období jsou: " << abs(expenses) << endl;
-        Utils::Mezera();
-    }
-    
-    void handleSumIncomes() {
-        cout << "Za jaké období (dny) chceš sečíst příjmy? (Pro všechny příjmy zadej -1): " << endl;
-        int days;
-        cin >> days;
-        cin.ignore(numeric_limits<streamsize>::max(), '\n');
-        
-        double incomes = transactionManager->calculateSum(currentUser->getId(), false, days);
-        cout << "Příjmy za dané období jsou: " << incomes << endl;
-        Utils::Mezera();
-    }
-    
-    void handleTotalBalance() {
-        cout << "Za jaké období (dny) chceš sečíst transakce? (Pro všechny transakce zadej -1): " << endl;
-        int days;
-        cin >> days;
-        cin.ignore(numeric_limits<streamsize>::max(), '\n');
-        
-        double expenses = transactionManager->calculateSum(currentUser->getId(), true, days);
-        double incomes = transactionManager->calculateSum(currentUser->getId(), false, days);
-        double total = incomes + expenses; // expense je <0
-        
-        string periodText = (days == -1) ? "" : " za " + to_string(days) + " dní";
-        
-        if (total < 0) {
-            cout << "Celková ztráta" << periodText << " je: " << abs(total) << endl;
-        } else {
-            cout << "Celkový zisk" << periodText << " je: " << total << endl;
-        }
-        Utils::Mezera();
-    }
-    
-    void handleBudgetSetting() {
-        cout << "Zadej svůj měsíční rozpočet (neomezený rozpočet je 0) - při překročení budeš upozorněn: " << endl;
-        string budgetStr;
-        double budget;
-        
-        cin >> budgetStr;
-        cin.ignore(numeric_limits<streamsize>::max(), '\n');
-        //cout << budgetStr << endl; // kontrola
-        
-        try {
-            budget = stod(budgetStr);
-            if (budget < 0) {
-                cout << "Zadej nezápornou hodnotu" << endl;
-                Utils::Mezera();
-                return;
+                    case 1:{ // přidání transakce
+                        transactionManager->addTransaction(currentUser->getId());
+                        
+                        break;}
+
+                    case 2: {// sečtení výdajů
+                        cout << "Za jaké období (dny) chceš sečíst výdaje? (Pro všechny výdaje zadej -1): " << endl;
+                        cin >> days;
+                        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                        
+                        expenses = transactionManager->SumOfMoneyLastNDays(currentUser->getId(), true, days);
+                        cout << "Výdaje za dané období jsou: " << abs(expenses) << endl;
+                        
+                        Utilities::Mezera();
+                        
+                        break;}
+
+                    case 3:{ // sečtení příjmů
+                        cout << "Za jaké období (dny) chceš sečíst příjmy? (Pro všechny příjmy zadej -1): " << endl;
+                        cin >> days;
+                        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                        
+                        incomes = transactionManager->SumOfMoneyLastNDays(currentUser->getId(), false, days);
+                        cout << "Příjmy za dané období jsou: " << incomes << endl;
+                        
+                        Utilities::Mezera();
+
+                        break;}
+
+                    case 4:{ // celkový zisk/ztráta
+                        cout << "Za jaké období (dny) chceš sečíst transakce? (Pro všechny transakce zadej -1): " << endl;
+                        cin >> days;
+                        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                        
+                        expenses = transactionManager->SumOfMoneyLastNDays(currentUser->getId(), true, days);
+                        incomes = transactionManager->SumOfMoneyLastNDays(currentUser->getId(), false, days);
+                        total = incomes + expenses; // expense je <0
+                        
+                        string periodText = (days == -1) ? "" : " za " + to_string(days) + " dní";
+                        
+                        if (total < 0) {
+                            cout << "Celková ztráta" << periodText << " je: " << abs(total) << endl;
+                        } else {
+                            cout << "Celkový zisk" << periodText << " je: " << total << endl;
+                        }
+                        Utilities::Mezera();
+
+                        break;}
+
+                    case 5:{ // smazání transakce
+                        transactionManager->deleteTransaction(currentUser->getId());
+                        
+                        break;}
+                    
+                    case 6:{ // zobrazení tabulky transakcí
+                        transactionManager->showTransactions(currentUser->getId());
+                        
+                        break;}
+                
+                    case 7: {// nastavení rozpočtu
+                        cout << "Zadej svůj měsíční rozpočet (neomezený rozpočet je 0) - při překročení budeš upozorněn: " << endl;
+                        string budgetStr;
+                        double budget;
+                        
+                        cin >> budgetStr;
+                        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                        //cout << budgetStr << endl; // kontrola
+                        
+                        try {
+                            budget = stod(budgetStr);
+                            if (budget < 0) {
+                                cout << "Zadej nezápornou hodnotu" << endl;
+                                Utilities::Mezera();
+                                break; // ne return, jinak skončí celej while a tedy program
+                            }
+
+                            currentUser->setBudget(budget);
+                        
+                        } catch (const invalid_argument& e) {
+                            cout << "Zadej platnou hodnotu." << endl;
+                            Utilities::Mezera();
+                            break;
+                        } 
+                        
+                        Utilities::Mezera();
+                        
+                        break;}
+
+                    case 8: {// filtrování podle kategorie
+                        categoryManager->filterByCategory(currentUser->getId());
+                        
+                        Utilities::Mezera();
+                        
+                        break;}
+
+                    case 9: {// import/export
+                        cout << "Kterou operaci chceš provést? (Import / Export)" << endl;
+                        string operationStr;
+                        getline(cin, operationStr);
+                        
+                        string operation = Utilities::toLower(operationStr);
+                        if (operation == "import") {
+                            fileManager->importFromCSV(currentUser->getId());
+                        } else if (operation == "export") {
+                            fileManager->exportToCSV(currentUser->getId());
+                        } else {
+                            cout << "Zadej platnou operaci" << endl;
+                        }
+                        
+                        Utilities::Mezera();
+                        
+                        break;}
+
+                    case 10: {// konec
+                        cout << "Konec programu." << endl;
+                        
+                        Utilities::Mezera();
+                        
+                        break;}
+
+                    default:{
+                        cout << "Neplatná volba." << endl;
+                        
+                        Utilities::Mezera();
+                        
+                        break;}
+                }
+            } catch (const exception& e) {
+                cerr << "Chyba při zpracování volby: " << e.what() << endl;
+                Utilities::Mezera();
             }
-
-            currentUser->setBudget(budget);
-          
-        } catch (const invalid_argument& e) {
-            cout << "Zadej platnou hodnotu." << endl;
-            Utils::Mezera();
-            return;
-        } 
-        Utils::Mezera();
-    }
-    
-    void handleImportExport() {
-        cout << "Kterou operaci chceš provést? (Import / Export)" << endl;
-        string operation;
-        getline(cin, operation);
-        
-        string op = Utils::toLower(operation);
-        if (op == "import") {
-            fileManager->importFromCSV(currentUser->getId());
-        } else if (op == "export") {
-            fileManager->exportToCSV(currentUser->getId());
-        } else {
-            cout << "Zadej platnou operaci" << endl;
         }
-        Utils::Mezera();
     }
 };
 
@@ -1032,12 +1054,11 @@ void SwitchChoice() {
 int main() {
     try {
         // Doplnění vlastních hodnot
-        BankingApp app("tcp://127.0.0.1:3306", "root", "heslo", "bankapp");
+        BankApp app("tcp://127.0.0.1:3306", "root", "SQLprojekt3", "bankapp");
         app.run();
     } catch (const exception& e) {
         cerr << "Fatální chyba: " << e.what() << endl;
         return 1;
     }
-    
     return 0;
 }
