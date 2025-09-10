@@ -1054,7 +1054,7 @@ private:
 int main() {
     try {
         // Doplnění vlastních hodnot
-        BankApp app("tcp://127.0.0.1:3306", "root", "SQLprojekt3", "bankapp");
+        BankApp app("tcp://127.0.0.1:3306", "user", "heslo", "database");
         app.run();
     } catch (const exception& e) {
         cerr << "Fatální chyba: " << e.what() << endl;
